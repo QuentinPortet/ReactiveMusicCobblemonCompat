@@ -1,7 +1,11 @@
 package circuitlord.reactivemusic;
 
 
-import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBiomeTags;
+import circuitlord.reactivemusic.mixin.BossBarHudAccessor;
+//import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBiomeTags;
+import net.fabricmc.fabric.api.tag.convention.v1.ConventionalBiomeTags;
+
+
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.hud.BossBarHud;
 import net.minecraft.client.gui.hud.ClientBossBar;
@@ -46,8 +50,6 @@ public final class SongPicker {
     public static final Field[] BIOME_TAG_FIELDS = ConventionalBiomeTags.class.getDeclaredFields();
     public static final List<TagKey<Biome>> BIOME_TAGS = new ArrayList<>();
 
-    public static Field BOSS_BAR_FIELD;
-
     public static Long TIME_FOR_FORGET_DAMAGE_SOURCE = 200L;
 
     static {
@@ -57,13 +59,6 @@ public final class SongPicker {
 
             BIOME_TAGS.add(biomeTag);
             biomeTagEventMap.put(biomeTag, false);
-        }
-
-        try {
-            BOSS_BAR_FIELD = BossBarHud.class.getDeclaredField("bossBars");
-            BOSS_BAR_FIELD.setAccessible(true);
-        } catch (NoSuchFieldException e) {
-            //throw new RuntimeException(e);
         }
     }
 
@@ -217,17 +212,15 @@ public final class SongPicker {
         // try to get boss bars
         boolean bossBarActive = false;
 
-        // TODO: fix null boss_bar_field
-        if (mc.inGameHud != null && mc.inGameHud.getBossBarHud() != null && BOSS_BAR_FIELD != null) {
+        if (mc.inGameHud != null && mc.inGameHud.getBossBarHud() != null) {
             try {
 
-                var bossBars = (Map<UUID, ClientBossBar>) BOSS_BAR_FIELD.get(mc.inGameHud.getBossBarHud());
+                var bossBars = ((BossBarHudAccessor) mc.inGameHud.getBossBarHud()).getBossBars();
 
                 if (!bossBars.isEmpty()) {
                     bossBarActive = true;
                 }
-            } catch (IllegalAccessException e) {
-                //e.printStackTrace();
+            } catch (Exception e) {
             }
         }
 

@@ -1,6 +1,8 @@
 package circuitlord.reactivemusic;
 
 import circuitlord.reactivemusic.config.ModConfig;
+import com.cobblemon.mod.common.client.sound.battle.BattleMusicController;
+import com.cobblemon.mod.common.client.sound.battle.BattleMusicInstance;
 import net.fabricmc.api.ModInitializer;
 
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
@@ -19,7 +21,7 @@ import java.util.Random;
 public class ReactiveMusic implements ModInitializer {
 
 	public static final String MOD_ID = "reactive_music";
-	public static final String MOD_VERSION = "0.5.0";
+	public static final String MOD_VERSION = "0.5.13";
 
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
@@ -42,14 +44,12 @@ public class ReactiveMusic implements ModInitializer {
 
 	static int slowTickUpdateCounter = 0;
 
-	static boolean currentDimBlacklisted = false;
+	static boolean silentMode = false;
 
 	boolean doSilenceForNextQueuedSong = true;
 
 
 	static Random rand = new Random();
-
-	//public static final circuitlord.reactivemusic.ReactiveMusicConfig CONFIG = circuitlord.reactivemusic.ReactiveMusicConfig.createAndLoad();
 
 
 	static ModConfig config;
@@ -165,6 +165,8 @@ public class ReactiveMusic implements ModInitializer {
 		if (SongLoader.activeSongpack == null) return;
 
 		MinecraftClient mc = MinecraftClient.getInstance();
+		assert mc != null;
+		boolean cobblemonBattleMusicIsPlaying = mc.getSoundManager().isPlaying(BattleMusicController.INSTANCE.getMusic());
 
 		if (!thread.isPlaying()) silenceTicks++;
 		else silenceTicks = 0;
@@ -173,17 +175,23 @@ public class ReactiveMusic implements ModInitializer {
 
 		if (slowTickUpdateCounter > 20) {
 
-			currentDimBlacklisted = false;
+			silentMode = false;
+//			mc.inGameHud.getChatHud().addMessage(Text.of("Silent mode OFF"));
 
 			// see if the dimension we're in is blacklisted -- update at same time as event map to keep them in sync
-			if (mc != null && mc.world != null) {
+			if (mc.world != null) {
 				String curDim = mc.world.getRegistryKey().getValue().toString();
 
 				for (String dim : config.blacklistedDimensions) {
 					if (dim.equals(curDim)) {
-						currentDimBlacklisted = true;
+						silentMode = true;
+//						mc.inGameHud.getChatHud().addMessage(Text.of("Silent mode ON (dimension)"));
 						break;
 					}
+				}
+				if (cobblemonBattleMusicIsPlaying) {
+					silentMode = true;
+//					mc.inGameHud.getChatHud().addMessage(Text.of("Silent mode ON (battle)"));
 				}
 			}
 
@@ -198,8 +206,9 @@ public class ReactiveMusic implements ModInitializer {
 
 		SongpackEntry newEntry = null;
 
-		if (!currentDimBlacklisted) {
 
+
+		if (!silentMode) {
 			// Try to find the highest entry with a song we haven't played recently
 			for (var entry : validEntries) {
 
@@ -257,6 +266,10 @@ public class ReactiveMusic implements ModInitializer {
 					&& ((silenceTicks > additionalSilence) || config.debugModeEnabled)) {
 				playNewSong = true;
 			}
+
+
+			// TODO: bug with the two below modes:
+			// TODO: when underground, we have alwaysplay so it means this immediately triggers again when it stops
 
 			// the newEntry is defined to always play, just start it immediately
 			else if (thread.notQueuedOrPlaying() && newEntry.alwaysPlay) {
@@ -331,15 +344,20 @@ public class ReactiveMusic implements ModInitializer {
 
 
 	public static void tickFadeOut() {
-
 		if (!thread.isPlaying())
 			return;
+		MinecraftClient mc = MinecraftClient.getInstance();
+		assert mc != null;
+		boolean cobblemonBattleMusicIsPlaying = mc.getSoundManager().isPlaying(BattleMusicController.INSTANCE.getMusic());
+		int finalFadeDuration = FADE_DURATION;
 
-		if (fadeOutTicks < FADE_DURATION) {
-			fadeOutTicks++;
-			thread.setGainPercentage(1f - (fadeOutTicks / (float)FADE_DURATION));
+		if (cobblemonBattleMusicIsPlaying) {
+			finalFadeDuration = 60;
 		}
-		else {
+		if (fadeOutTicks < finalFadeDuration) {
+			fadeOutTicks++;
+			thread.setGainPercentage(1f - (fadeOutTicks / (float)finalFadeDuration));
+		} else {
 			thread.resetPlayer();
 			fadeOutTicks = 0;
 		}
